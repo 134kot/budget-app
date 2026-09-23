@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#fff5f8">
+<title>My Monthly Budget</title>
+<style>
+:root{--bg:#fff5f8;--card:#fffafd;--ink:#3b2d34;--muted:#806c76;--accent:#c96f8d;--soft:#f9e3eb;--line:#ecd3dc;--danger:#a84d5d}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.app{max-width:620px;margin:auto;padding:env(safe-area-inset-top) 14px calc(28px + env(safe-area-inset-bottom))}
+header{padding:22px 4px 10px} h1{font-size:27px;margin:0 0 4px} .sub{color:var(--muted);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 2px 10px #00000008}
+.summary{display:grid;grid-template-columns:1fr 1fr;gap:10px}.metric{background:var(--soft);padding:13px;border-radius:14px}.metric b{display:block;font-size:21px;margin-top:3px}.metric span{font-size:12px;color:var(--muted)}
+h2{font-size:17px;margin:0 0 12px}.row{display:grid;grid-template-columns:1fr 110px;gap:10px;align-items:center;margin:9px 0}
+label{font-size:14px} input,select,button{font:inherit} input,select{width:100%;border:1px solid #e3c4cf;background:white;border-radius:12px;padding:12px;font-size:16px}
+button{border:0;border-radius:13px;padding:12px 14px;font-weight:650;background:var(--accent);color:white;min-height:44px}
+button.secondary{background:#f6e4eb;color:var(--ink)} button.danger{background:#fae3e8;color:var(--danger)}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.cat{padding:12px 0;border-bottom:1px solid var(--line)}.cat:last-child{border:0}
+.catTop{display:flex;justify-content:space-between;gap:8px;font-size:14px}.bar{height:8px;background:#f4e4ea;border-radius:8px;overflow:hidden;margin-top:8px}.fill{height:100%;background:var(--accent)}
+.small{font-size:12px;color:var(--muted)} .tx{display:grid;grid-template-columns:1fr auto;gap:8px;padding:11px 0;border-bottom:1px solid var(--line)}.tx:last-child{border:0}
+.tx b{font-size:14px}.amt{font-weight:700}.empty{text-align:center;color:var(--muted);padding:16px 0}
+dialog{border:0;border-radius:20px;width:min(92vw,520px);padding:0;background:var(--card)}dialog::backdrop{background:#0007}.modal{padding:18px}.modal .field{margin:12px 0}.modal label{display:block;margin-bottom:5px}.modalActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:16px}
+details summary{font-weight:650;cursor:pointer}.note{font-size:12px;color:var(--muted);line-height:1.45}
+</style>
+</head>
+<body><div class="app">
+<header><h1>Monthly Budget</h1><div class="sub">Personal budget tracker • entries stay in this browser</div></header>
+
+<section class="card">
+<h2>Net paychecks</h2>
+<div class="row"><label>Paycheck 1</label><input class="income" data-key="k1" type="number" step=".01"></div>
+<div class="row"><label>Paycheck 2</label><input class="income" data-key="k2" type="number" step=".01"></div>
+<div class="row"><label>Household paycheck 1</label><input class="income" data-key="r1" type="number" step=".01"></div>
+<div class="row"><label>Household paycheck 2</label><input class="income" data-key="r2" type="number" step=".01"></div>
+<div class="row"><label>Extra / other net income</label><input class="income" data-key="extra" type="number" step=".01"></div>
+<button id="recalcBtn" style="width:100%;margin:0 0 12px" onclick="syncIncome()">Update totals</button>
+</section>
+
+<section class="summary">
+<div class="metric"><span>Net income</span><b id="incomeTotal">$0</b></div>
+<div class="metric"><span>Budgeted</span><b id="budgetTotal">$0</b></div>
+<div class="metric"><span>Spent / paid</span><b id="spentTotal">$0</b></div>
+<div class="metric"><span>Cash remaining</span><b id="cashLeft">$0</b></div>
+</section>
+
+<section class="card">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2 style="margin:0">Budget categories</h2><button class="secondary" onclick="openCategory()">+ Category</button></div>
+<div id="categories"></div>
+</section>
+
+<section class="card">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2 style="margin:0">Spending</h2><button onclick="openTx()">+ Add expense</button></div>
+<div id="transactions"></div>
+</section>
+
+<section class="card">
+<details><summary>Backup & reset</summary>
+<p class="note">Your entries are saved using this browser’s local storage rather than being embedded in the hosted page. Export a backup periodically because browser data can be cleared or lost. Do not store bank logins, account numbers, card numbers, or other sensitive credentials here.</p>
+<div class="actions"><button class="secondary" onclick="exportData()">Export backup</button><button class="secondary" onclick="document.getElementById('importFile').click()">Import backup</button></div>
+<input id="importFile" type="file" accept=".json,application/json" hidden>
+<div style="height:9px"></div><button class="danger" style="width:100%" onclick="resetMonth()">Clear transactions</button>
+</details>
+</section>
+</div>
+
+<dialog id="txDialog"><div class="modal"><h2>Add expense / payment</h2>
+<div class="field"><label>Date</label><input id="txDate" type="date"></div>
+<div class="field"><label>Category</label><select id="txCat"></select></div>
+<div class="field"><label>Description</label><input id="txDesc" placeholder="e.g. ShopRite"></div>
+<div class="field"><label>Amount</label><input id="txAmt" type="number" step=".01" inputmode="decimal"></div>
+<div class="modalActions"><button class="secondary" onclick="txDialog.close()">Cancel</button><button onclick="saveTx()">Save</button></div>
+</div></dialog>
+
+<dialog id="catDialog"><div class="modal"><h2>Add budget category</h2>
+<div class="field"><label>Name</label><input id="catName" placeholder="Category name"></div>
+<div class="field"><label>Monthly budget</label><input id="catBudget" type="number" step=".01" inputmode="decimal"></div>
+<div class="modalActions"><button class="secondary" onclick="catDialog.close()">Cancel</button><button onclick="saveCategory()">Add</button></div>
+</div></dialog>
+
+<script>
+const KEY="monthlyBudget_private_v3";
+const defaults={
+ income:{k1:0,k2:0,r1:0,r2:0,extra:0},
+ categories:[
+  ["Housing",0],["Utilities",0],["Groceries / Household",0],["Transportation",0],["Insurance",0],
+  ["Debt Payments",0],["Pets",0],["Dining / Coffee",0],["Subscriptions",0],["Savings / Home Reserve",0],["Other / Misc.",0]
+ ].map((x,i)=>({id:"c"+i,name:x[0],budget:x[1]})),
+ tx:[]
+};
+let data;
+try{data=JSON.parse(localStorage.getItem(KEY))||JSON.parse(JSON.stringify(defaults))}catch(e){data=JSON.parse(JSON.stringify(defaults))}
+const $=id=>document.getElementById(id), money=n=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(Number(n)||0);
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}}
+function save(){persist();render()}
+function updateSummary(){
+ let inc=Object.values(data.income).reduce((a,b)=>a+(Number(b)||0),0);
+ let bud=data.categories.reduce((a,c)=>a+(Number(c.budget)||0),0);
+ let spent=data.tx.reduce((a,t)=>a+(Number(t.amount)||0),0);
+ $("incomeTotal").textContent=money(inc);
+ $("budgetTotal").textContent=money(bud);
+ $("spentTotal").textContent=money(spent);
+ $("cashLeft").textContent=money(inc-spent);
+}
+function render(){
+ document.querySelectorAll(".income").forEach(el=>el.value=data.income[el.dataset.key]??0);
+ let inc=Object.values(data.income).reduce((a,b)=>a+(Number(b)||0),0);
+ let bud=data.categories.reduce((a,c)=>a+(Number(c.budget)||0),0);
+ let spent=data.tx.reduce((a,t)=>a+(Number(t.amount)||0),0);
+ $("incomeTotal").textContent=money(inc); $("budgetTotal").textContent=money(bud); $("spentTotal").textContent=money(spent); $("cashLeft").textContent=money(inc-spent);
+ $("categories").innerHTML=data.categories.map(c=>{
+  let s=data.tx.filter(t=>t.cat===c.id).reduce((a,t)=>a+(Number(t.amount)||0),0), left=c.budget-s, pct=c.budget?Math.min(100,s/c.budget*100):(s?100:0);
+  return `<div class="cat"><div class="catTop"><span><b>${esc(c.name)}</b><br><span class="small">${money(s)} spent of <input aria-label="Budget for ${esc(c.name)}" onchange="editBudget('${c.id}',this.value)" value="${c.budget}" type="number" step=".01" style="width:92px;padding:5px 7px;font-size:13px"> budget</span></span><span style="text-align:right"><b>${money(left)}</b><br><span class="small">left</span></span></div><div class="bar"><div class="fill" style="width:${pct}%"></div></div></div>`
+ }).join("");
+ $("txCat").innerHTML=data.categories.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("");
+ $("transactions").innerHTML=data.tx.length?data.tx.slice().reverse().map(t=>`<div class="tx"><div><b>${esc(t.desc||data.categories.find(c=>c.id===t.cat)?.name||"Expense")}</b><div class="small">${esc(t.date||"")} • ${esc(data.categories.find(c=>c.id===t.cat)?.name||"")}</div></div><div><div class="amt">${money(t.amount)}</div><button class="danger" style="padding:5px 8px;min-height:0;margin-top:4px" onclick="delTx('${t.id}')">Delete</button></div></div>`).join(""):`<div class="empty">No spending entered yet.</div>`;
+}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+document.querySelectorAll(".income").forEach(el=>{
+ el.addEventListener("input",e=>{
+   data.income[e.target.dataset.key]=Number(e.target.value)||0;
+   persist();
+   updateSummary();
+ });
+ el.addEventListener("blur",e=>{
+   data.income[e.target.dataset.key]=Number(e.target.value)||0;
+   persist();
+   updateSummary();
+ });
+});
+function syncIncome(){
+ document.querySelectorAll(".income").forEach(el=>data.income[el.dataset.key]=Number(el.value)||0);
+ persist(); updateSummary();
+}
+function editBudget(id,v){let c=data.categories.find(x=>x.id===id);if(c){c.budget=Number(v)||0;save()}}
+function openTx(){$("txDate").value=new Date().toISOString().slice(0,10);$("txDesc").value="";$("txAmt").value="";$("txDialog").showModal()}
+function saveTx(){let a=Number($("txAmt").value);if(!a)return;data.tx.push({id:Date.now().toString(),date:$("txDate").value,cat:$("txCat").value,desc:$("txDesc").value,amount:a});save();$("txDialog").close()}
+function delTx(id){if(confirm("Delete this entry?")){data.tx=data.tx.filter(t=>t.id!==id);save()}}
+function openCategory(){$("catName").value="";$("catBudget").value="";$("catDialog").showModal()}
+function saveCategory(){let n=$("catName").value.trim();if(!n)return;data.categories.push({id:"c"+Date.now(),name:n,budget:Number($("catBudget").value)||0});save();$("catDialog").close()}
+function exportData(){let blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="budget-backup.json";a.click();URL.revokeObjectURL(a.href)}
+$("importFile").addEventListener("change",async e=>{let f=e.target.files[0];if(!f)return;try{let x=JSON.parse(await f.text());if(!x.income||!x.categories||!x.tx)throw 0;data=x;save();alert("Backup restored.")}catch{alert("That backup file could not be read.")}e.target.value=""});
+function resetMonth(){if(confirm("Clear all spending entries? Your categories and paycheck amounts will stay.")){data.tx=[];save()}}
+render();
+</script></body></html>
